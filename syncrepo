@@ -1,0 +1,11 @@
+#!/bin/bash
+
+for repo in core extra; do
+    for arch in i686 x86_64; do
+
+        if [[ -d /mnt/raid/archive/archlinux/ ]]; then
+            rsync -aPv rsync://mirror.csclub.uwaterloo.ca/archlinux/$repo/os/$arch /mnt/raid/archive/archlinux/$repo/os/ >> /var/log/crond 2>&1
+        fi
+
+    done
+done

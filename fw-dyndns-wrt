@@ -1,0 +1,79 @@
+#!/bin/sh
+# filename: fw-dyndns
+#
+# A script to update iptables records for dynamic dns hosts.
+# Written by: Dave Horner (http://dave.thehorners.com)
+# Released into public domain.
+#
+# Run this script in your cron table to update ips.
+#
+# You might want to put all your dynamic hosts in a separate chain.
+# That way you can easily see what dynamic hosts are trusted.
+#
+# create the chain in iptables.
+# /usr/sbin/iptables -N dyndns
+# insert the chain into the input chain @ the head of the list.
+# /usr/sbin/iptables -I INPUT 1 -j dyndns
+# flush all the rules in the chain
+# /usr/sbin/iptables -F dyndns
+
+PREROUTING="wan_dnat"               ## The prerouting nat chain name.
+FORWARD="wan2lan"                   ## The forward chain name.
+DESTINATION_IP="192.168.110.150"    ## The desintation IP use to port forward 'to'.
+JIMK_IP="192.168.110.21"            ## The desintation IP use to port forward 'to'.
+IPTABLES="/usr/sbin/iptables"
+
+mkdir -p /var/run/fw-dyndns
+
+## check to make sure we have enough args passed.
+if [ -z "$1" ]; then
+    echo ""$0" hostname"
+    echo "You must supply a hostname to update in iptables."
+    exit
+fi
+
+for HOST in $* ; do
+    ## lookup host name from dns tables
+    IP=$(ping -c 1 "$HOST" | head -n 1 | awk '{print $3}' | tr -d "():")
+
+    HOSTFILE="/var/run/fw-dyndns/host-"$HOST""
+
+    OLD_IP=""
+    if [[ -e "$HOSTFILE" ]]; then
+        OLD_IP=$(cat "$HOSTFILE")
+        # echo "CAT returned: $?"
+    fi
+
+    if [[ "${#OLD_IP}" != "0" ]]; then
+        echo $(date) "Removing old iptables rules for "$HOST" ("$OLD_IP")"
+        #$("$IPTABLES" -D "$CHAIN" -s "$OLD_IP"/32 -j ACCEPT)
+        $("$IPTABLES" -t nat -D $PREROUTING -p tcp -s "$OLD_IP"/32 -d 0.0.0.0/0 --dport 22 -j DNAT --to-destination $DESTINATION_IP)
+        $("$IPTABLES" -D $FORWARD -p tcp -s "$OLD_IP"/32 -d $DESTINATION_IP --dport 22 -j ACCEPT)
+
+        $("$IPTABLES" -t nat -D $PREROUTING -p tcp -s "$OLD_IP"/32 -d 0.0.0.0/0 --dport 2222 -j DNAT --to-destination $JIMK_IP)
+        $("$IPTABLES" -D $FORWARD -p tcp -s "$OLD_IP"/32 -d $JIMK_IP --dport 2222 -j ACCEPT)
+
+        $("$IPTABLES" -t nat -D $PREROUTING -p tcp -s "$OLD_IP"/32 -d 0.0.0.0/0 --dport 8080 -j DNAT --to-destination $JIMK_IP)
+        $("$IPTABLES" -D $FORWARD -p tcp -s "$OLD_IP"/32 -d $JIMK_IP --dport 8080 -j ACCEPT)
+    fi
+
+    if [[ -n "$IP" ]]; then
+        echo $(date) "Inserting new iptables rules for "$HOST" ($IP)"
+        #$("$IPTABLES" -A "$CHAIN" -s "$IP"/32 -j ACCEPT)
+        $("$IPTABLES" -t nat -I $PREROUTING -p tcp -s "$IP"/32 -d 0.0.0.0/0 --dport 22 -j DNAT --to-destination $DESTINATION_IP)
+        $("$IPTABLES" -I $FORWARD -p tcp -s "$IP"/32 -d $DESTINATION_IP --dport 22 -j ACCEPT)
+
+        $("$IPTABLES" -t nat -I $PREROUTING -p tcp -s "$OLD_IP"/32 -d 0.0.0.0/0 --dport 2222 -j DNAT --to-destination $JIMK_IP)
+        $("$IPTABLES" -I $FORWARD -p tcp -s "$OLD_IP"/32 -d $JIMK_IP --dport 2222 -j ACCEPT)
+
+        $("$IPTABLES" -t nat -I $PREROUTING -p tcp -s "$OLD_IP"/32 -d 0.0.0.0/0 --dport 8080 -j DNAT --to-destination $JIMK_IP)
+        $("$IPTABLES" -I $FORWARD -p tcp -s "$OLD_IP"/32 -d $JIMK_IP --dport 8080 -j ACCEPT)
+    fi
+
+
+    ## store new ip.
+    echo "$IP" > "$HOSTFILE"
+
+done
+
+exit 0

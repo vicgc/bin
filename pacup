@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [[ -e $HOME/mnt/donkey/.bashrc || $HOSTNAME == donkey ]]; then
+    abs
+    yaourt -Syu --aur
+#    pacman --noconfirm -Rsn $(pacman -Qqtd)
+    pacman-optimize
+    sync
+    echo "==> Sync Complete"
+    find /etc -type f -name "*.pac*"
+elif
+    mount $HOME/mnt/donkey
+else
+    echo "Is donkey sshfs mounted?"
+fi

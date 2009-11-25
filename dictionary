@@ -1,0 +1,42 @@
+#!/bin/sh
+#--------
+# Command line dictionary/thesaurus
+# Usage: dictionary <word>
+#
+# Requires: w3m
+#
+# This script will look up the provided word or phrase and print the results
+# from these references:
+#
+#   1. dictionary.reference.com
+#   2. thesaurus.reference.com
+#   3. wikipedia
+#
+
+
+if [ "$#" -lt "1" ];
+then
+    echo "Usage: dictionary <word>"
+    exit 1
+fi
+
+phrase="$*"
+
+file=`mkdir -p /tmp/tools && echo /tmp/tools/dict.txt`
+
+echo "== Dictionary ==========================================" > $file
+
+res=$(w3m -dump "http://dictionary.reference.com/search?q=$phrase")
+echo "$res" >> $file
+
+echo "== Thesaurus ==========================================" >> $file
+
+res=$(w3m -dump "http://thesaurus.reference.com/search?q=$phrase")
+echo "$res" >> $file
+
+echo "== Wikipedia ==========================================" >> $file
+
+res=$(w3m -dump "http://en.wikipedia.org/wiki/Special:Search?search=$phrase")
+echo "$res" >> $file
+
+less $file

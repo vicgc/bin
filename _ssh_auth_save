@@ -1,0 +1,4 @@
+#!/bin/bash
+
+[[ -e $(/bin/ls -dt1 /tmp/ssh-*/agent* |head -n 1) ]] > /dev/null 2>&1 && \
+    ln -sf $(/bin/ls -dt1 /tmp/ssh-*/agent* |head -n 1) $HOME/.screen/ssh-auth-sock

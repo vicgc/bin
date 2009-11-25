@@ -1,0 +1,159 @@
+#!/bin/bash
+
+SUCCESS=0
+FAIL=1
+
+function usage {
+
+    cat << EOF
+usage: $0 [options] name
+
+This script will look in several man page sources until it finds a man page.
+It is useful for reading man pages for programs you do not have installed.
+
+EXAMPLES:
+
+    $0 grep
+
+SOURCES:
+    * local man pages
+    * online http://linuxcommand.org
+    * online http://linux.die.net
+    * online google with i'm feel lucky:  man pages <command>
+
+OPTIONS:
+   -v      Verbose
+
+   -h      Print this help message.
+EOF
+}
+
+
+#
+# man_url
+#
+# Sent: url - eg http://linunxcommand/man_pages/find1.html
+# Return: error status 0 = success 1 = failure
+# Purpose:
+#
+#    Display an online man pages from the url
+#
+function man_url {
+
+    url=$1
+
+    [[ -n "$verbose" ]] && echo "Trying: $url"
+
+    res=$(w3m -dump_head "$url" | head -1)
+
+    [[ -n "$verbose" ]] && echo "$res"
+
+    # The first line of "w3m -dump_head" is the HTTP status code, 200 OK means found, 404 Not Found  means not found
+
+    # Example first lines
+    #   HTTP/1.1 200 OK
+    #   HTTP/1.1 404 Not Found
+
+    code=$(echo $res | awk '{print $2}')
+
+    if [[ "$code" != "200" ]]; then
+        [[ -n "$verbose" ]] && echo "Not found $url"
+        return $FAIL
+    fi
+
+    [[ -n "$verbose" ]] && echo "Found $url"
+
+    res=$(w3m -dump "$url")
+    echo "$res" > $file
+
+    less $file
+
+    # ${PAGER:-less} "$file"
+
+    return $SUCCESS
+}
+
+
+verbose=
+
+while getopts "hm:t:v" options; do
+  [[ -n $verbose ]] && print_opt
+  case $options in
+    v ) verbose="1";;
+    h ) usage
+        exit 0;;
+    \? ) usage
+         exit 1;;
+    * ) usage
+          exit 1;;
+
+  esac
+done
+
+shift $(($OPTIND - 1))
+
+name=$1
+
+if [[ -z "$name" ]]; then
+    usage
+    exit 1
+fi
+
+
+# Try local man pages
+found=0
+/usr/bin/man $name && found=1
+
+if [[ "$found" -eq "1" ]]; then
+    [[ -n "$verbose" ]] && echo "Found local man page."
+    exit 0
+fi
+
+file=`mkdir -p /tmp/tools && echo /tmp/tools/manpages.txt`
+
+
+# Try http://linuxcommand.org
+
+url="http://linuxcommand.org/man_pages/${name}1.html"
+
+man_url $url
+result=$?
+
+[[ -n "$verbose" ]] && echo "man_url returned $result"
+
+if [[ "$result" -eq $SUCCESS ]]; then
+    [[ -n "$verbose" ]] && echo "Found $url."
+    exit 0
+fi
+
+
+# Try http://linux.die.net
+
+url="http://linux.die.net/man/1/${name}"
+
+man_url $url
+result=$?
+
+[[ -n "$verbose" ]] && echo "man_url returned $result"
+
+if [[ "$result" -eq $SUCCESS ]]; then
+    [[ -n "$verbose" ]] && echo "Found $url."
+    exit 0
+fi
+
+query="$name+man+page"
+url="http://www.google.com/search?btnI=I%27m+Feeling+Lucky&ie=UTF-8&oe=UTF-8&q=${query}"
+man_url $url
+
+result=$?
+
+[[ -n "$verbose" ]] && echo "man_url returned $result"
+
+if [[ "$result" -eq $SUCCESS ]]; then
+    [[ -n "$verbose" ]] && echo "Found $url."
+    exit 0
+fi
+
+
+echo "Nothing found"
+exit 1

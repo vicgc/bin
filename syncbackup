@@ -1,0 +1,224 @@
+#!/bin/bash
+
+SYNCBACKUP_VERSION="4.0"
+
+ADMIN="ADMIN_EMAIL_ADDRESS"
+BACKUP_DIR="/mnt/raid/archive/syncbackup/backups"
+ARCHIVE_DIR="/mnt/raid/archive/syncbackup"
+HOST_FILE="/etc/syncbackup/systems"
+LOG_DIR="/var/log/syncbackup"
+MIN_PERHOST="28"
+
+SYNCDATE=$(date +%F)
+TRANSERRORS=0
+TRET=0
+
+cd $LOG_DIR && OUTPUT_FILE=$(mktemp backup-$SYNCDATE-XXXXXX)
+
+chmod 755 $OUTPUT_FILE
+
+exec > $OUTPUT_FILE 2>&1
+
+echo "-------------------------------------------------------------------------"
+echo "$0 $SYNCBACKUP_VERSION"
+echo "Started on $(date)"
+echo ""
+echo "This script will backup all systems specified in the file:"
+echo "      $HOST_FILE"
+echo ""
+echo "Backups will be purged after $MIN_PERHOST days"
+echo "-------------------------------------------------------------------------"
+
+
+## Purge daily incremental archives
+for HOST in $(cat "$HOST_FILE") ; do
+    while [[ $(find "$ARCHIVE_DIR" -mindepth 1 -maxdepth 1 -type d -name "${HOST}-*" | wc -l) -gt "$MIN_PERHOST" ]]; do
+        echo "Purging archives older than "$MIN_PERHOST" days ..."
+        OBSOLETE_ARCHIVE=$(/bin/ls -rdt1 ${ARCHIVE_DIR}/${HOST}-* | head -n 1)    ## Find the oldest directory
+        echo "Purging "$OBSOLETE_ARCHIVE""
+        if [[ ! $(rm -r "$OBSOLETE_ARCHIVE") ]]; then
+            echo "===> Success"
+        else
+            echo "***** FAILED! *****"
+            ERRORS=1
+        fi
+        echo -----
+    done
+
+done
+
+## Purge weekly full backups
+for HOST in $(cat "$HOST_FILE") ; do
+    while [[ $(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type f -name "${HOST}-*" | wc -l) -gt "$MIN_PERHOST" ]]; do
+        echo "Purging backups older than "$MIN_PERHOST" days ..."
+        OBSOLETE_BACKUP=$(/bin/ls -rdt1 "$BACKUP_DIR"/${HOST}-* | head -n 1)    ## Find the oldest file
+        echo "Purging "$OBSOLETE_BACKUP""
+        if [[ ! $(rm -r "$OBSOLETE_BACKUP") ]]; then
+            echo "===> Success"
+        else
+            echo "***** FAILED! *****"
+            ERRORS=1
+        fi
+        echo -----
+    done
+done
+
+
+
+## Daily incremental backups
+if [[ ! -f $HOST_FILE ]]; then
+   echo "ERROR: File $HOST_FILE not found ..."
+   exit 1
+fi
+
+for HOST in $(cat $HOST_FILE); do
+    echo
+    echo ===== Beginning archive of host $HOST at $(date) =====
+    echo
+    echo "Preparing archive directories ..."
+    echo -----
+
+## FIND THE PREVIOUS ARCHIVE directory name and generate today's archive directory name
+    if [[ "$(find $ARCHIVE_DIR -mindepth 1 -maxdepth 1 -type d -name "$HOST-*")" ]]; then
+        OLD_ARCHIVE=$(ls -dc1 $ARCHIVE_DIR/$HOST-* | head -n 1)
+    else
+        OLD_ARCHIVE=""
+    fi
+
+    NEW_ARCHIVE=$ARCHIVE_DIR/$HOST-$SYNCDATE/
+
+    if [[ -d "$NEW_ARCHIVE" ]]; then
+        echo "***** The backup directory for today for $HOST already exists, skipping backup for this host! *****"
+        echo -----
+        continue
+    else
+        if [[ "$OLD_ARCHIVE" == "" ]]; then
+            echo "***** Warning: No previous backup exists for $HOST.  (Is this the first time?) *****"
+            mkdir $NEW_ARCHIVE
+        else
+            echo "Making a hard-link copy for $HOST from the latest archive ..."
+            echo -----
+            if [[ ! "$(cp -al $OLD_ARCHIVE $NEW_ARCHIVE)" ]]; then
+                echo "Creating $NEW_ARCHIVE ..."
+                echo "===> Success"
+            else
+                echo "***** FAILED! *****"
+                continue
+            fi
+            echo -----
+        fi
+    fi
+
+    echo "Rsync'ing data for $HOST"
+    echo "$HOST:/ $ARCHIVE_DIR/$HOST-$SYNCDATE/"
+    echo -----
+
+    rsync -auv --delete --delete-excluded --numeric-ids     \
+        -e "ssh -i /root/.ssh/id_rsa-syncbackup"            \
+        --include=/etc                                      \
+        --include=/home                                     \
+        --include=/mnt                                      \
+        --include=/mnt/raid                                 \
+        --include=/mnt/raid/archive                         \
+        --include=/srv                                      \
+        --include=/root                                     \
+        --include=/var                                      \
+        --include=/var/git                                  \
+        --include=/var/lib                                  \
+        --include=/var/lib/bitlbee                          \
+        --exclude=/home/*/dl                                \
+        --exclude=/home/*/media                             \
+        --exclude=/home/*/mnt                               \
+        --exclude=/home/*/tmp                               \
+        --exclude=/mnt/raid/archive/archlinux               \
+        --exclude=/mnt/raid/archive/syncbackup              \
+        --exclude=/root/dl                                  \
+        --exclude=/root/media                               \
+        --exclude=/root/mnt                                 \
+        --exclude=/root/tmp                                 \
+        --exclude=cache*                                    \
+        --exclude=Cache*                                    \
+        --exclude=.cpan                                     \
+        --include=/etc/**                                   \
+        --include=/home/**                                  \
+        --include=/mnt/raid/archive/**                      \
+        --include=/srv/**                                   \
+        --include=/root/**                                  \
+        --include=/var/git/**                               \
+        --include=/var/lib/bitlbee/**                       \
+        --exclude=*                                         \
+        $HOST:/ $ARCHIVE_DIR/$HOST-$SYNCDATE/
+
+    TRET=$?
+    if [[ $TRET == 0 ]]; then
+        echo "===> Success"
+            elif [[ $TRET == 24 ]]; then
+                echo "Transient errors; source image is changing.  Likely this is no cause of panic."
+                TRANSERRORS=$((TRANSERRORS+1))
+        else
+            echo "***** FAILED! *****"
+            ERRORS=1
+        fi
+        echo -----
+
+## rsync changes the date of the root synced directory too, this is not what we want
+    touch $NEW_ARCHIVE
+
+    echo
+    echo ===== Finished archive of host $HOST at $(date) =====
+    echo
+
+done
+
+## Weekly complete backups
+for HOST in $(cat $HOST_FILE); do
+    if [[ "$(date +%w)" == "0" ]]; then
+        echo "Today is Sunday.  Creating weekly backups ..."
+        echo "Compressing $ARCHIVE_DIR/$HOST-$SYNCDATE"
+        tar -czf $BACKUP_DIR/$HOST-$SYNCDATE.tgz $ARCHIVE_DIR/$HOST-$SYNCDATE > /dev/null 2>&1
+        if [[ $? == 0 ]]; then
+            echo "===> Success"
+        else
+            echo "***** FAILED! *****"
+            ERRORS=1
+        fi
+        echo -----
+    fi
+
+    if [[ "$(date +%w)" == "0" ]]; then
+        pre_a=0
+
+        while read a b ; do
+            if [[ "$pre_a" -gt "$a" ]]; then
+                ((i=100-(100*"$a"/"$pre_a")))
+                if [[ "$i" -gt 10 ]]; then
+                    echo "Backup for $HOST has increased "${i}"% since last backup"
+                    echo -e "To: $ADMIN\nSubject: Backup for $HOST has increased "${i}"% since last backup\n\n$(/bin/du -s $(/bin/ls -dt1 $BACKUP_DIR/$HOST-*.tgz | head -2))" | sendmail -v -- $ADMIN
+                fi
+            fi
+
+        pre_a="$a"
+
+        done < <(/bin/du -s $(/bin/ls -dt1 $BACKUP_DIR/$HOST-*.tgz | head -2))
+    fi
+
+done
+
+
+echo "Archive completed, $(date)"
+echo "Syncbackup v$SYNCBACKUP_VERSION running on $(hostname)" > $LOG_DIR/syncbackup.log
+echo "Backup Completed - Transcript @ http://donkey/syncbackup/$OUTPUT_FILE" >> $LOG_DIR/syncbackup.log
+echo >> $LOG_DIR/syncbackup.log
+
+if [[ $ERRORS ]]; then
+   echo "Some errors were reported!" >> $LOG_DIR/syncbackup.log
+elif (( $TRANSERRORS > 0 )); then
+   echo "Some ($TRANSERRORS) transient errors occured during copying." >> $LOG_DIR/syncbackup.log
+else
+   echo "No errors were reported" >> $LOG_DIR/syncbackup.log
+fi
+
+echo -e "To: $ADMIN\nSubject: Daily Backup Report\n\n$(cat $LOG_DIR/syncbackup.log)" | sendmail -v -- $ADMIN
+
+
+# vim: ft=sh

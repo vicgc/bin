@@ -1,0 +1,6 @@
+#! /bin/bash
+
+iwlist "$1" scanning | \
+    awk -F '[ :=]+' '/ESS/{ printf $3" " } /Chan/{ printf $6" " } /Qual/{ printf ($3 "\n") } /Encr/{ printf $4" " }' | \
+    sed 's/)//g' | \
+    sort -k4
