@@ -1,5 +1,23 @@
 #!/bin/bash
 
+script=${0##*/}
+
+usage() {
+
+    cat << EOF
+
+    usage: $script
+
+    Binary package update on a arch system.
+
+EOF
+}
+
+if [[ "$#" -ne "0" ]]; then
+    usage
+    exit 1
+fi
+
 if [[ -e $HOME/mnt/donkey/.bashrc || $HOSTNAME == donkey ]]; then
     abs
     yaourt -Syu --aur
@@ -8,7 +26,7 @@ if [[ -e $HOME/mnt/donkey/.bashrc || $HOSTNAME == donkey ]]; then
     sync
     echo "==> Sync Complete"
     find /etc -type f -name "*.pac*"
-elif
+elif [[ -e /bin/mount ]]; then
     mount $HOME/mnt/donkey
 else
     echo "Is donkey sshfs mounted?"

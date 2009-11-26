@@ -1,26 +1,35 @@
 #!/bin/sh
-# filename: fw-dyndns
-#
-# A script to update iptables records for dynamic dns hosts.
-# Written by: Dave Horner (http://dave.thehorners.com)
-# Released into public domain.
-#
-# Run this script in your cron table to update ips.
-#
-# You might want to put all your dynamic hosts in a separate chain.
-# That way you can easily see what dynamic hosts are trusted.
-#
-# create the chain in iptables.
-# /usr/sbin/iptables -N dyndns
-# insert the chain into the input chain @ the head of the list.
-# /usr/sbin/iptables -I INPUT 1 -j dyndns
-# flush all the rules in the chain
-# /usr/sbin/iptables -F dyndns
+
+usage() {
+
+    cat << EOF
+
+    A script to update iptable records for dynamic dns hosts.
+
+    Run this script in your cron table to update ips.
+
+    You might want to put all your dynamic hosts in a separate chain,
+    this way one can easily see what dynamic hosts are trusted.
+
+    create the chain in iptables.
+    /usr/sbin/iptables -N dyndns
+    insert the chain into the input chain @ the head of the list.
+    /usr/sbin/iptables -I INPUT 1 -j dyndns
+    flush all the rules in the chain
+    /usr/sbin/iptables -F dyndns
+
+EOF
+}
+
+if [[ "$#" -eq "0" ]]; then
+    usage
+    exit 1
+fi
 
 PREROUTING="wan_dnat"               ## The prerouting nat chain name.
 FORWARD="wan2lan"                   ## The forward chain name.
 DESTINATION_IP="192.168.110.150"    ## The desintation IP use to port forward 'to'.
-JIMK_IP="192.168.110.21"            ## The desintation IP use to port forward 'to'.
+JIMK_IP="192.168.110.21"
 IPTABLES="/usr/sbin/iptables"
 
 mkdir -p /var/run/fw-dyndns

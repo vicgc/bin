@@ -1,4 +1,35 @@
 #!/bin/bash
 
+script=${0##*/}
+
+usage() {
+
+    cat << EOF
+
+    usage: $script
+
+    Openning GNU screen from a remote computer and screen can't find the
+    local ssh-agent.  The environment variable SSH_AUTH_SOCK has to be
+    updated manually.  The solution is to symlink to a common file.
+
+    The script is called in the file:
+        $HOME/.bash_profile
+
+    Export this variable in $HOME/.bashrc
+        export SSH_AUTH_SOCK=/root/.screen/ssh-auth-sock
+
+    Export the variable in $HOME/.screenrc
+        unsetenv SSH_AUTH_SOCK
+        setenv SSH_AUTH_SOCK $HOME/.screen/ssh-auth-sock
+
+
+EOF
+}
+
+if [[ "$#" -ne "0" ]]; then
+    usage
+    exit 1
+fi
+
 [[ -e $(/bin/ls -dt1 /tmp/ssh-*/agent* |head -n 1) ]] > /dev/null 2>&1 && \
     ln -sf $(/bin/ls -dt1 /tmp/ssh-*/agent* |head -n 1) $HOME/.screen/ssh-auth-sock

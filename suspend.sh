@@ -1,7 +1,26 @@
 #!/bin/bash
 
-## On a laptop run this script as a cron job
-## */5 * * * * $HOME/bin/suspend.sh
+script=${0##*/}
+
+usage() {
+
+    cat << EOF
+
+    usage: $script
+
+    Suspend laptop when battery remaining is >= 5%
+
+    On a laptop run this script as a cron job
+    */5 * * * * $HOME/bin/suspend.sh
+
+EOF
+}
+
+if [[ "$#" -ne "0" ]]; then
+    usage
+    exit 1
+fi
+
 
 battery='-'
 bat_dir="/proc/acpi/battery/BAT0"

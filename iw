@@ -1,5 +1,24 @@
 #! /bin/bash
 
+script=${0##*/}
+
+usage() {
+
+    cat << EOF
+
+    usage: $script
+
+    Reformat output of iwlist.
+
+EOF
+}
+
+if [[ "$#" -eq "0" ]]; then
+    usage
+    exit 1
+fi
+
+
 iwlist "$1" scanning | \
     awk -F '[ :=]+' '/ESS/{ printf $3" " } /Chan/{ printf $6" " } /Qual/{ printf ($3 "\n") } /Encr/{ printf $4" " }' | \
     sed 's/)//g' | \

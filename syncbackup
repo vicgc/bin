@@ -1,8 +1,27 @@
 #!/bin/bash
 
+cript=${0##*/}
+
+usage() {
+
+    cat << EOF
+
+    usage: $script
+
+    This script creates incrimental archives and weekly backups.
+
+EOF
+}
+
+if [[ "$#" -ne "0" ]]; then
+    usage
+    exit 1
+fi
+
+
 SYNCBACKUP_VERSION="4.0"
 
-ADMIN="ADMIN_EMAIL_ADDRESS"
+ADMIN="EMAIL_ADDRESS"
 BACKUP_DIR="/mnt/raid/archive/syncbackup/backups"
 ARCHIVE_DIR="/mnt/raid/archive/syncbackup"
 HOST_FILE="/etc/syncbackup/systems"
@@ -152,14 +171,14 @@ for HOST in $(cat $HOST_FILE); do
     TRET=$?
     if [[ $TRET == 0 ]]; then
         echo "===> Success"
-            elif [[ $TRET == 24 ]]; then
-                echo "Transient errors; source image is changing.  Likely this is no cause of panic."
-                TRANSERRORS=$((TRANSERRORS+1))
-        else
-            echo "***** FAILED! *****"
-            ERRORS=1
-        fi
-        echo -----
+    elif [[ $TRET == 24 ]]; then
+        echo "Transient errors; source image is changing.  Likely this is no cause of panic."
+        TRANSERRORS=$((TRANSERRORS+1))
+    else
+        echo "***** FAILED! *****"
+        ERRORS=1
+    fi
+    echo -----
 
 ## rsync changes the date of the root synced directory too, this is not what we want
     touch $NEW_ARCHIVE
