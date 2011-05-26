@@ -59,12 +59,12 @@ function clean_file {
         echo ""
         ls -l $conf $conf_new
 
-        diff=$(diff -q $conf $conf_new 2>&1)
+        diff=$(diff -b -q $conf $conf_new 2>&1)
 
         case $? in
-            0 ) echo "${GREEN}Files are identical.${COLOUROFF}";;
-            1 ) echo "${BROWN}Files differ.${COLOUROFF}";;
-            * ) echo "${RED}${diff}${COLOUROFF}";;
+            0 ) echo -e "${GREEN}Files are identical.${COLOUROFF}";;
+            1 ) echo -e "${BROWN}Files differ.${COLOUROFF}";;
+            * ) echo -e "${RED}${diff}${COLOUROFF}";;
         esac
 
         echo ""
@@ -88,8 +88,8 @@ EOT
         [[ $code == 'd' ]] && cmd="diff -b $conf $conf_new"
         [[ $code == 'm' ]] && cmd="mv -i $conf_new $conf"
         [[ $code == 'r' ]] && cmd="rm -i $conf_new"
-        [[ $code == 'c' ]] && cmd="vi $conf"
-        [[ $code == 'p' ]] && cmd="vi $conf_new"
+        [[ $code == 'c' ]] && cmd="vim $conf"
+        [[ $code == 'p' ]] && cmd="vim $conf_new"
         [[ $code == 'v' ]] && cmd="vimdiff $conf $conf_new"
         [[ $code == 'n' ]] && break
         [[ $code == 'x' ]] && exit 0
@@ -97,11 +97,11 @@ EOT
         echo ""
         [[ -z $cmd ]] && echo "Invalid code $code" && continue
 
-        echo $BLUE $cmd $COLOUROFF
+        echo -e $BLUE $cmd $COLOUROFF
         echo ""
-        echo -n $GREEN
+        echo -e -n $GREEN
         eval $cmd
-        echo -n $COLOUROFF
+        echo -e -n $COLOUROFF
         echo ""
     done
 
@@ -126,7 +126,7 @@ done
 
 shift $(($OPTIND - 1))
 
-find_cmd='find /boot /etc -name '*.pacnew' -o -name '*.pacsave' | sort'
+find_cmd='find -L /boot /etc -name '*.pacnew' -o -name '*.pacsave' | sort'
 
 if [[ -n "$list" ]]; then
     eval $find_cmd

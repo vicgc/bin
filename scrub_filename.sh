@@ -9,6 +9,7 @@ This script prints a cleaned up version of a filename. See notes.
 
 OPTIONS:
 
+    -d  Scrub all subdirectory names as well.
     -h  Print this help message.
 
 EXAMPLES:
@@ -26,20 +27,23 @@ NOTES:
     The script performs the following formats.
     * Remove any non-word characters, ie anything not an alpha, digit or
       underscore.
-    * Replace " - " with single underscore.
+    * Replace hyphens with underscores.
     * Replace whitespace with underscores.
+    * Replace multiple underscores with a single underscore.
     * Change all characters to lowercase.
 
-    The filename can include a path. Both the path and filename will be
-    scrubbed.
+    The filename can include a path. By default only the filename will be
+    scrubbed. If the -d options is provided, the path is scrubbed as well.
 
     If a filename has whitespace, surround it with quotes.
 EOF
 }
 
-while getopts "h" options; do
+do_dirs=
+while getopts "dh" options; do
   case $options in
 
+    d ) do_dirs=1;;
     h ) usage
         exit 0;;
     \?) usage
@@ -58,9 +62,22 @@ if [[ "$#" -lt "1" ]]; then
     exit 1
 fi
 
-name=$1
+filename="$1"
 
-echo $name |    sed -e 's/\s/_/g' \
-                    -e 's/_-_/_/g' \
+dir=
+base="$filename"
+if [[ -z $do_dirs ]]; then
+    dir=$(dirname "$filename")
+    base=$(basename "$filename")
+fi
+scrubbed=$(echo "$base" |    sed -e 's/\s/_/g' \
+                    -e 's/-/_/g' \
+                    -e 's/[_]\+/_/g' \
                     -e 's/[^0-9A-Za-z_./]//g'  | \
-                    tr "[[:upper:]]" "[[:lower:]]"
+                    tr "[[:upper:]]" "[[:lower:]]")
+
+if [[ -z $do_dirs ]]; then
+    echo "$dir/$scrubbed"
+else
+    echo "$scrubbed"
+fi

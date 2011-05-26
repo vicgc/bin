@@ -26,7 +26,7 @@ def main():
     for file in args:
         fh = open(file)
         data = cPickle.load(fh)
-        fh.close
+        fh.close()
 
         for k in data.keys():
             print "%s: %s" % ( k, data[k])

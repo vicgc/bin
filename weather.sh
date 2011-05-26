@@ -11,4 +11,9 @@ echo "$res" > $file
 res=$(w3m -dump "http://www.weatheroffice.gc.ca/forecast/textforecast_e.html?Bulletin=fpcn51.cwto")
 echo "$res" >> $file
 
-less $file
+if [[ -n "$1" ]]; then
+    less -i -p"$*" $file
+else
+    less $file
+fi
+

@@ -11,7 +11,8 @@ OPTIONS:
 
     -d  Dry run. Show results but do not rename files.
     -i  Rename files interactively.
-    -r  Remove matching text from file names.
+    -r  Recursive.
+    -x  Remove matching text from file names.
     -s  Scrub file name.
 
     -h  Print this help message.
@@ -20,23 +21,28 @@ NOTES:
 
     If no options are given, a list of files is printed. No changes are made.
 
-    If the -r and -s options are both given, the remove is done first.
+    If the -x and -s options are both given, the remove is done first.
 
     The -s option requires scrub_filesname.sh
+
+    A file will not be renamed if an existing file with the new name already
+    exists.
 EOF
 }
 
 dry_run=
 interactive=
+recursive=
 remove_text=
 scrub=
 
-while getopts "dhir:s" options; do
+while getopts "dhirsx:" options; do
   case $options in
 
     d ) dry_run=1;;
     i ) interactive=1;;
-    r ) remove_text=$OPTARG;;
+    r ) recursive=1;;
+    x ) remove_text=$OPTARG;;
     s ) scrub=1;;
     h ) usage
         exit 0;;
@@ -52,24 +58,28 @@ shift $(($OPTIND - 1))
 
 path=$1
 
-if [[ -z $path ]]; then
+if [[ -z "$path" ]]; then
     usage
     exit 1
 fi
 
-
-for file in $path/*; do
+# Remove spaces from Internal Field Separator
+saveIFS=$IFS
+IFS=$'\n'
+maxdepth=1
+[[ -n $recursive ]] && maxdepth=99999
+find $1 -depth -maxdepth $maxdepth | while read file; do
     new_file="$file"
 
     if [[ -n "$remove_text" ]]; then
-        new_file=${file/$remove_text/}
+        new_file=${new_file/$remove_text/}
     fi
 
     if [[ -n $scrub ]];then
         new_file=$(~/bin/scrub_filename.sh "$new_file")
     fi
 
-    cmd="mv \"$file\" \"$new_file\""
+    cmd="mv -n \"$file\" \"$new_file\""
     echo $cmd
 
     if [[ -z $dry_run ]]; then
@@ -86,10 +96,14 @@ for file in $path/*; do
 
         if [[ "$reply" == 'y' ]]; then
             if [[ "$file" != "$new_file" ]]; then
-                mv "$file" "$new_file"
+                if [[ -e "$new_file" ]]; then
+                    echo "Refusing to clobber $new_file" >&2
+                else
+                    mv -n "$file" "$new_file"
+                fi
             fi
         fi
     fi;
 
 done
-
+IFS=$saveIFS
